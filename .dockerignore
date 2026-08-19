@@ -1,0 +1,62 @@
+# 敏感文件
+.env
+.env.local
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+
+# 运行时数据（容器内重新生成）
+reports/
+reports/uploads/
+*.sqlite
+*.db
+
+# 内部工作文件
+backups/
+优化建议/
+*.bak
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# 版本控制
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 文档（镜像中不需要）
+DOCKER.md
+demo-script.md
+demo-script-cn.md
+Day2-进展报告.md
+项目完整文档.md
+CodeRisk-Cloud-完整文档.md
+README.md
+
+# 测试/工具（镜像中不需要）
+bruno/
+tests/
+
+# 其他
+Dockerfile*
+docker-compose*.yml
+.dockerignore

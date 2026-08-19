@@ -1,0 +1,86 @@
+# CodeRisk Cloud — Docker Compose (CPU Mode)
+# 一键启动：docker-compose up --build
+# 评审/无 GPU 环境使用此配置
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: coderisk-redis
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: coderisk-api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CODERISK_API_KEY=${CODERISK_API_KEY:-dev-key-change-in-production}
+      - CODERISK_PATH=/app/code-risk-agent
+      - NUTRIENT_DWS_API_KEY=${NUTRIENT_DWS_API_KEY:-}
+      - NUTRIENT_DWS_API_URL=${NUTRIENT_DWS_API_URL:-https://api.nutrient.io/build}
+      - REPORTS_DIR=/app/reports
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-}
+    volumes:
+      - ./reports:/app/reports
+      # CodeRisk Agent 源码通过 volume 挂载（需提前 clone 到 ./code-risk-agent）
+      - ${CODERISK_AGENT_PATH:-./code-risk-agent}:/app/code-risk-agent:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: coderisk-worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CODERISK_PATH=/app/code-risk-agent
+      - REPORTS_DIR=/app/reports
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-2}
+      # CPU 模式：LLM 通过 HTTP 调用外部 llama-server
+      # 如果 llama-server 在宿主机运行，改为 host.docker.internal:8080
+      - LOCAL_HTTP_URL=${LOCAL_HTTP_URL:-http://host.docker.internal:8080}
+    volumes:
+      - ./reports:/app/reports
+      - ${CODERISK_AGENT_PATH:-./code-risk-agent}:/app/code-risk-agent:ro
+    depends_on:
+      - redis
+      - api
+    restart: unless-stopped
+    command: celery -A app.tasks worker --loglevel=info
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: coderisk-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - CODERISK_API_URL=http://api:8000
+      - CODERISK_API_KEY=${CODERISK_API_KEY:-dev-key-change-in-production}
+    depends_on:
+      - api
+    restart: unless-stopped
+    command: >
+      streamlit run app/dashboard.py
+      --server.port 8501
+      --server.address 0.0.0.0
+      --server.headless true
+
+volumes:
+  redis-data:

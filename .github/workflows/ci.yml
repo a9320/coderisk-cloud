@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive  # 拉取 code-risk-agent 引擎
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov safety pip-audit
+
+      - name: Run engine unit tests
+        working-directory: code-risk-agent
+        run: pytest tests/ -v --cov=. --cov-report=xml
+
+      - name: Run API tests (Bruno)
+        run: |
+          npm install -g @usebruno/cli
+          cd bruno
+          bru run --env ci
+
+      - name: Security scan — dependencies
+        run: |
+          safety check -r requirements.txt
+          pip-audit --requirement requirements.txt
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: code-risk-agent/coverage.xml
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build Docker images
+        run: docker-compose -f docker-compose.yml build
+
+      - name: Test Docker health
+        run: |
+          docker-compose up -d
+          sleep 10
+          curl -sf http://localhost:8000/health | grep -q '"status": "ok"'
+          docker-compose down

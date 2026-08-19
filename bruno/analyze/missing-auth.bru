@@ -1,0 +1,35 @@
+meta {
+  name: Missing Authentication
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/analyze
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "source": "github",
+    "repo_url": "https://github.com/a9320/code-risk-agent"
+  }
+}
+
+assert {
+  res.status: eq 401
+}
+
+tests {
+  test("should require auth", function() {
+    expect(res.status).to.equal(401);
+  });
+  test("should indicate missing header", function() {
+    expect(res.body.detail).to.include("Missing");
+  });
+}

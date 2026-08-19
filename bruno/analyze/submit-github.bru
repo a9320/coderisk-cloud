@@ -1,0 +1,55 @@
+meta {
+  name: Submit GitHub Analysis
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/analyze
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{apiKey}}
+}
+
+body:json {
+  {
+    "source": "github",
+    "repo_url": "https://github.com/a9320/code-risk-agent",
+    "branch": "master",
+    "output_formats": ["json", "sarif", "pdf"]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.task_id: isDefined
+  res.body.status: eq pending
+}
+
+tests {
+  test("should return 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("should return task_id", function() {
+    expect(res.body.task_id).to.exist;
+    expect(res.body.task_id).to.match(/^cr-\d{8}-[a-f0-9]{8}$/);
+  });
+  test("should have pending status", function() {
+    expect(res.body.status).to.equal("pending");
+  });
+  test("should return helpful message", function() {
+    expect(res.body.message).to.include("Use GET");
+  });
+}
+
+script:post-response {
+  // Save task_id for downstream tests
+  bru.setVar("taskId", res.body.task_id);
+}

@@ -1,0 +1,32 @@
+meta {
+  name: Invalid API Key
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/tasks/cr-20260818-fake0000
+  body: none
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: invalid-key-12345
+}
+
+assert {
+  res.status: eq 403
+}
+
+tests {
+  test("should reject invalid key", function() {
+    expect(res.status).to.equal(403);
+  });
+  test("should indicate invalid key", function() {
+    expect(res.body.detail).to.include("Invalid");
+  });
+}

@@ -1,0 +1,32 @@
+meta {
+  name: Non-existent Task
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/tasks/cr-19990101-notexist0
+  body: none
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{apiKey}}
+}
+
+assert {
+  res.status: eq 404
+}
+
+tests {
+  test("should return 404", function() {
+    expect(res.status).to.equal(404);
+  });
+  test("should indicate not found", function() {
+    expect(res.body.detail).to.include("not found");
+  });
+}
