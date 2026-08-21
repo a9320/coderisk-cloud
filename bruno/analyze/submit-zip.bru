@@ -1,0 +1,25 @@
+meta {
+  name: Submit ZIP Upload
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/analyze/upload
+  body: multipartForm
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+body:multipart-form {
+  file: @file(sample-code.zip)
+}
+
+assert {
+  res.status: eq 200
+  res.body.task_id: isDefined
+  res.body.status: eq pending
+}

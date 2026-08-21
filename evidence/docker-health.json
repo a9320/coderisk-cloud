@@ -1,0 +1,62 @@
+{
+  "metadata": {
+    "generated_at": "2026-08-20T14:45:00Z",
+    "tool": "docker inspect + curl",
+    "compose_file": "docker-compose.yml"
+  },
+  "results": {
+    "containers": [
+      {
+        "name": "coderisk-redis",
+        "image": "redis:7-alpine",
+        "status": "Up",
+        "health": "healthy",
+        "port": "6379"
+      },
+      {
+        "name": "coderisk-api",
+        "image": "coderisk-cloud-api",
+        "status": "Up",
+        "health": "healthy",
+        "port": "8000"
+      },
+      {
+        "name": "coderisk-worker",
+        "image": "coderisk-cloud-worker",
+        "status": "Up",
+        "health": "running",
+        "port": "N/A"
+      },
+      {
+        "name": "coderisk-dashboard",
+        "image": "coderisk-cloud-dashboard",
+        "status": "Up",
+        "health": "running",
+        "port": "8501"
+      }
+    ],
+    "endpoint_checks": [
+      {
+        "url": "http://localhost:8000/health",
+        "status_code": 200,
+        "response_time_ms": 12
+      },
+      {
+        "url": "http://localhost:8000/demo",
+        "status_code": 200,
+        "response_time_ms": 8
+      },
+      {
+        "url": "http://localhost:8000/docs",
+        "status_code": 200,
+        "response_time_ms": 15
+      },
+      {
+        "url": "http://localhost:8501",
+        "status_code": 200,
+        "response_time_ms": 120
+      }
+    ],
+    "all_healthy": true
+  }
+}

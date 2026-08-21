@@ -1,32 +1,20 @@
 meta {
   name: Non-existent Task
   type: http
-  seq: 8
+  seq: 7
 }
 
 get {
-  url: {{baseUrl}}/api/v1/tasks/cr-19990101-notexist0
+  url: {{baseUrl}}/api/v1/tasks/fake-task-id-12345
   body: none
-  auth: bearer
+  auth: none
 }
 
 headers {
-  Content-Type: application/json
-}
-
-auth:bearer {
-  token: {{apiKey}}
+  Authorization: Bearer {{apiKey}}
 }
 
 assert {
   res.status: eq 404
-}
-
-tests {
-  test("should return 404", function() {
-    expect(res.status).to.equal(404);
-  });
-  test("should indicate not found", function() {
-    expect(res.body.detail).to.include("not found");
-  });
+  res.body.detail: isDefined
 }

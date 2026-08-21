@@ -10,23 +10,8 @@ get {
   auth: none
 }
 
-headers {
-  Content-Type: application/json
-}
-
 assert {
   res.status: eq 200
   res.body.status: eq ok
-}
-
-tests {
-  test("should return 200", function() {
-    expect(res.status).to.equal(200);
-  });
-  test("should have ok status", function() {
-    expect(res.body.status).to.equal("ok");
-  });
-  test("should have version", function() {
-    expect(res.body.version).to.exist;
-  });
+  res.body.version: isDefined
 }

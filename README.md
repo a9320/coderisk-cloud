@@ -79,8 +79,12 @@ curl http://localhost:8000/api/v1/reports/cr-20260817-abc12345 \
 
 ## Architecture
 
+![Architecture](docs/architecture.svg)
+
 ```
-GitHub Action → Kong Gateway → FastAPI + Celery + Redis → CodeRisk Worker (AMD GPU) → Nutrient DWS (PDF)
+[Input] → [Gateway] → [Queue] → [4-Agent Engine] → [Output]
+                                                ↑
+                            PR Comments (Webhook Callback) ←┘
 ```
 
 ## License

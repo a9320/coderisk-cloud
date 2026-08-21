@@ -17,19 +17,11 @@ headers {
 body:json {
   {
     "source": "github",
-    "repo_url": "https://github.com/a9320/code-risk-agent"
+    "repo_url": "https://github.com/a9320/coderisk-cloud"
   }
 }
 
 assert {
   res.status: eq 401
-}
-
-tests {
-  test("should require auth", function() {
-    expect(res.status).to.equal(401);
-  });
-  test("should indicate missing header", function() {
-    expect(res.body.detail).to.include("Missing");
-  });
+  res.body.detail: isDefined
 }

@@ -156,9 +156,9 @@ async def github_webhook(request: Request, x_hub_signature: str | None = Header(
     payload = await request.body()
 
     # 验证 Webhook 签名
+    if not x_hub_signature:
+        raise HTTPException(status_code=401, detail="Webhook signature required (X-Hub-Signature-256 header missing)")
     if settings.GITHUB_WEBHOOK_SECRET:
-        if not x_hub_signature:
-            raise HTTPException(status_code=401, detail="Webhook signature required (X-Hub-Signature-256 header missing)")
         expected = "sha256=" + hmac.new(
             settings.GITHUB_WEBHOOK_SECRET.encode(),
             payload,
@@ -239,12 +239,13 @@ async def health():
     except Exception:
         pass
 
-    all_ok = all(checks.values())
-    status_code = 200 if all_ok else 503
+    # GPU 是可选项，不影响整体健康状态
+    core_ok = checks["redis"] and checks["celery_worker"]
+    status_code = 200 if core_ok else 503
 
     return JSONResponse(
         {
-            "status": "ok" if all_ok else "degraded",
+            "status": "ok" if core_ok else "degraded",
             "checks": checks,
             "version": settings.API_VERSION,
         },
@@ -376,4 +377,12 @@ async def root():
         "version": settings.API_VERSION,
         "docs": "/docs",
         "health": "/health",
+        "demo": "/demo",
     }
+
+
+@app.get("/demo")
+async def demo():
+    """Demo endpoint — 返回一份预置的示例扫描结果，无需 API Key"""
+    from app.demo_fixture import DEMO_REPORT
+    return DEMO_REPORT

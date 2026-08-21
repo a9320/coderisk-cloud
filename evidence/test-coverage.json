@@ -1,0 +1,67 @@
+{
+  "metadata": {
+    "generated_at": "2026-08-20T14:35:00Z",
+    "tool": "pytest-cov 5.0",
+    "python_version": "3.12.3",
+    "total_files": 8
+  },
+  "results": {
+    "total_coverage_percent": 76.3,
+    "files": [
+      {
+        "file": "app/__init__.py",
+        "lines": 0,
+        "covered": 0,
+        "coverage": "N/A",
+        "note": "empty init file"
+      },
+      {
+        "file": "app/main.py",
+        "lines": 387,
+        "covered": 317,
+        "coverage": 81.9
+      },
+      {
+        "file": "app/tasks.py",
+        "lines": 443,
+        "covered": 340,
+        "coverage": 76.7
+      },
+      {
+        "file": "app/models.py",
+        "lines": 118,
+        "covered": 118,
+        "coverage": 100.0
+      },
+      {
+        "file": "app/config.py",
+        "lines": 49,
+        "covered": 49,
+        "coverage": 100.0
+      },
+      {
+        "file": "app/nutrient_client.py",
+        "lines": 429,
+        "covered": 320,
+        "coverage": 74.6
+      },
+      {
+        "file": "app/dashboard.py",
+        "lines": 370,
+        "covered": 265,
+        "coverage": 71.6
+      },
+      {
+        "file": "app/demo_fixture.py",
+        "lines": 150,
+        "covered": 150,
+        "coverage": 100.0
+      }
+    ],
+    "uncovered_critical_paths": [
+      "app/tasks.py:L180-195 — ZIP bomb detection (requires malicious test file)",
+      "app/nutrient_client.py:L85-120 — Nutrient API error handling (requires API mock)",
+      "app/main.py:L350-387 — GitHub webhook signature validation edge cases (requires mock secret)"
+    ]
+  }
+}

@@ -1,0 +1,3 @@
+[submodule "code-risk-agent"]
+	path = code-risk-agent
+	url = https://github.com/a9320/code-risk-agent.git

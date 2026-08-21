@@ -1,0 +1,21 @@
+# CodeRisk Cloud — Code Owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global fallback
+* @a9320
+
+# CI/CD and security workflows
+/.github/workflows/ @a9320
+/.pre-commit-config.yaml @a9320
+
+# Core API layer
+/app/ @a9320
+
+# AI engine (submodule)
+/code-risk-agent/ @a9320
+
+# Documentation and evidence
+/docs/ @a9320
+/evidence/ @a9320
+/JUDGES.md @a9320
+/verify.sh @a9320

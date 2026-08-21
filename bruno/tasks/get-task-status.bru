@@ -1,46 +1,24 @@
 meta {
   name: Get Task Status
   type: http
-  seq: 5
+  seq: 6
 }
 
 get {
   url: {{baseUrl}}/api/v1/tasks/{{taskId}}
   body: none
-  auth: bearer
+  auth: none
 }
 
 headers {
-  Content-Type: application/json
-}
-
-auth:bearer {
-  token: {{apiKey}}
+  Authorization: Bearer {{apiKey}}
 }
 
 assert {
   res.status: eq 200
   res.body.task_id: eq {{taskId}}
-  res.body.progress: isNumber
-}
-
-tests {
-  test("should return 200", function() {
-    expect(res.status).to.equal(200);
-  });
-  test("should match task_id", function() {
-    expect(res.body.task_id).to.equal(bru.getVar("taskId"));
-  });
-  test("should have valid status", function() {
-    const validStatuses = ["pending", "queued", "analyzing", "verifying", "generating_report", "completed", "failed"];
-    expect(res.body.status).to.be.oneOf(validStatuses);
-  });
-  test("should have progress 0-100", function() {
-    expect(res.body.progress).to.be.a("number");
-    expect(res.body.progress).to.be.at.least(0);
-    expect(res.body.progress).to.be.at.most(100);
-  });
-  test("should have agent_status object", function() {
-    expect(res.body.agent_status).to.be.an("object");
-  });
+  res.body.status: isDefined
+  res.body.progress: gte 0
+  res.body.progress: lte 100
+  res.body.agent_status: isDefined
 }

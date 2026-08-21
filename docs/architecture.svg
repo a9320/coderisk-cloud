@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <filter id="glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="arrowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8b949e"/>
+      <stop offset="100%" stop-color="#58a6ff"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="900" fill="#0d1117"/>
+
+  <!-- Title -->
+  <text x="800" y="55" text-anchor="middle" fill="#c9d1d9" font-family="DejaVu Sans, sans-serif" font-size="28" font-weight="bold">CodeRisk Cloud — Architecture</text>
+  <text x="800" y="85" text-anchor="middle" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="14">4-Agent AI Security Pipeline · Cloud-Native · AMD GPU Local Inference</text>
+
+  <!-- Column 1: Input -->
+  <rect x="40" y="120" width="180" height="50" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="130" y="150" text-anchor="middle" fill="#58a6ff" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="bold">① Input</text>
+
+  <rect x="50" y="185" width="160" height="55" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="60" y="208" fill="#c9d1d9" font-family="DejaVu Sans, sans-serif" font-size="14">GitHub Push</text>
+  <text x="60" y="228" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Webhook Trigger</text>
+
+  <rect x="50" y="255" width="160" height="55" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="60" y="278" fill="#c9d1d9" font-family="DejaVu Sans, sans-serif" font-size="14">REST API</text>
+  <text x="60" y="298" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   curl / SDK</text>
+
+  <rect x="50" y="325" width="160" height="55" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="60" y="348" fill="#c9d1d9" font-family="DejaVu Sans, sans-serif" font-size="14">Dashboard</text>
+  <text x="60" y="368" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Streamlit on FastAPI</text>
+
+  <!-- Column 2: Gateway -->
+  <rect x="250" y="120" width="180" height="50" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="340" y="150" text-anchor="middle" fill="#58a6ff" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="bold">② Gateway</text>
+
+  <rect x="260" y="185" width="160" height="75" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="270" y="208" fill="#c9d1d9" font-family="DejaVu Sans, sans-serif" font-size="14">FastAPI</text>
+  <text x="270" y="228" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Bearer Auth</text>
+  <text x="270" y="246" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Rate Limit</text>
+
+  <rect x="260" y="280" width="160" height="50" rx="6" fill="#3b1f1f" stroke="#8b3a3a" stroke-width="1"/>
+  <text x="270" y="303" fill="#f0883e" font-family="DejaVu Sans, sans-serif" font-size="14">401 / 403</text>
+  <text x="270" y="321" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Rejected</text>
+
+  <!-- Column 3: Queue -->
+  <rect x="460" y="120" width="180" height="50" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="550" y="150" text-anchor="middle" fill="#58a6ff" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="bold">③ Queue</text>
+
+  <rect x="470" y="185" width="160" height="75" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="480" y="208" fill="#c9d1d9" font-family="DejaVu Sans, sans-serif" font-size="14">Celery</text>
+  <text x="480" y="228" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Async Tasks</text>
+  <text x="480" y="246" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Workers x2</text>
+
+  <rect x="470" y="280" width="160" height="50" rx="6" fill="#1f2b1f" stroke="#3a6b3a" stroke-width="1"/>
+  <text x="480" y="303" fill="#3fb950" font-family="DejaVu Sans, sans-serif" font-size="14">Redis 7</text>
+  <text x="480" y="321" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Broker + Cache</text>
+
+  <!-- Column 4: 4-Agent Engine -->
+  <rect x="670" y="115" width="420" height="430" rx="10" fill="#161b22" stroke="#1a3a5c" stroke-width="3" filter="url(#glow)"/>
+  <rect x="670" y="115" width="420" height="430" rx="10" fill="none" stroke="#58a6ff" stroke-width="2"/>
+  <text x="780" y="145" fill="#58a6ff" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="bold">④ 4-Agent Engine (Core)</text>
+
+  <!-- AMD GPU Badge -->
+  <rect x="960" y="122" width="115" height="26" rx="4" fill="#2d1a1a" stroke="#ED1C24" stroke-width="1"/>
+  <text x="970" y="140" fill="#ED1C24" font-family="DejaVu Sans, sans-serif" font-size="12" font-weight="bold">AMD GPU</text>
+
+  <!-- Agent 1 -->
+  <rect x="685" y="170" width="390" height="82" rx="6" fill="#1f3a2f" stroke="#3fb950" stroke-width="1"/>
+  <text x="700" y="195" fill="#3fb950" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="bold">Agent 1: Static Analysis</text>
+  <text x="700" y="220" fill="#8b949e" font-family="DejaVu Sans Mono, monospace" font-size="13">AST  Semgrep  Taint</text>
+  <line x1="880" y1="252" x2="880" y2="257" stroke="#3fb950" stroke-width="2"/>
+  <polygon points="880,257 876,249 884,249" fill="#3fb950"/>
+
+  <!-- Agent 2 -->
+  <rect x="685" y="257" width="390" height="82" rx="6" fill="#1a2d4a" stroke="#58a6ff" stroke-width="1"/>
+  <text x="700" y="282" fill="#58a6ff" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="bold">Agent 2: Semantic Analysis</text>
+  <text x="700" y="307" fill="#8b949e" font-family="DejaVu Sans Mono, monospace" font-size="13">LLM Code Understanding</text>
+  <line x1="880" y1="339" x2="880" y2="344" stroke="#58a6ff" stroke-width="2"/>
+  <polygon points="880,344 876,336 884,336" fill="#58a6ff"/>
+
+  <!-- Agent 3 -->
+  <rect x="685" y="344" width="390" height="82" rx="6" fill="#2d1a3a" stroke="#a371f7" stroke-width="1"/>
+  <text x="700" y="369" fill="#a371f7" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="bold">Agent 3: Deep Verifier</text>
+  <text x="700" y="394" fill="#8b949e" font-family="DejaVu Sans Mono, monospace" font-size="13">Cross-check  CVE  De-FP</text>
+  <line x1="880" y1="426" x2="880" y2="431" stroke="#a371f7" stroke-width="2"/>
+  <polygon points="880,431 876,423 884,423" fill="#a371f7"/>
+
+  <!-- Agent 4 -->
+  <rect x="685" y="431" width="390" height="82" rx="6" fill="#3a2d1a" stroke="#f0883e" stroke-width="1"/>
+  <text x="700" y="456" fill="#f0883e" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="bold">Agent 4: Report Generator</text>
+  <text x="700" y="481" fill="#8b949e" font-family="DejaVu Sans Mono, monospace" font-size="13">JSON  SARIF  PDF</text>
+  <text x="700" y="501" fill="#a371f7" font-family="DejaVu Sans, sans-serif" font-size="12">via Nutrient DWS (SHA-256 Sign)</text>
+
+  <!-- Column 5: Output -->
+  <rect x="1120" y="120" width="180" height="50" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="1210" y="150" text-anchor="middle" fill="#58a6ff" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="bold">⑤ Output</text>
+
+  <rect x="1130" y="185" width="160" height="55" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="1140" y="208" fill="#c9d1d9" font-family="DejaVu Sans, sans-serif" font-size="14">JSON</text>
+  <text x="1140" y="228" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Structured</text>
+
+  <rect x="1130" y="255" width="160" height="55" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="1140" y="278" fill="#c9d1d9" font-family="DejaVu Sans, sans-serif" font-size="14">SARIF 2.1</text>
+  <text x="1140" y="298" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Standard</text>
+
+  <rect x="1130" y="325" width="160" height="55" rx="6" fill="#1a1a2d" stroke="#a371f7" stroke-width="1"/>
+  <text x="1140" y="348" fill="#a371f7" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="bold">PDF Report</text>
+  <text x="1140" y="368" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">   Signed &amp; Tamper-evident</text>
+
+  <!-- Inter-column arrows -->
+  <line x1="225" y1="145" x2="245" y2="145" stroke="url(#arrowGrad)" stroke-width="2"/>
+  <polygon points="245,145 237,141 237,149" fill="#58a6ff"/>
+
+  <line x1="435" y1="145" x2="455" y2="145" stroke="url(#arrowGrad)" stroke-width="2"/>
+  <polygon points="455,145 447,141 447,149" fill="#58a6ff"/>
+
+  <line x1="645" y1="145" x2="665" y2="145" stroke="url(#arrowGrad)" stroke-width="2"/>
+  <polygon points="665,145 657,141 657,149" fill="#58a6ff"/>
+
+  <line x1="1095" y1="145" x2="1115" y2="145" stroke="url(#arrowGrad)" stroke-width="2"/>
+  <polygon points="1115,145 1107,141 1107,149" fill="#58a6ff"/>
+
+  <!-- Feedback loop: Output → Input (PR Comments) -->
+  <line x1="1140" y1="380" x2="1140" y2="460" stroke="#8b949e" stroke-width="2" stroke-dasharray="8,8"/>
+  <line x1="1140" y1="460" x2="210" y2="460" stroke="#8b949e" stroke-width="2" stroke-dasharray="8,8"/>
+  <line x1="210" y1="460" x2="210" y2="320" stroke="#8b949e" stroke-width="2" stroke-dasharray="8,8"/>
+  <polygon points="210,320 206,328 214,328" fill="#8b949e"/>
+  <text x="500" y="475" fill="#58a6ff" font-family="DejaVu Sans, sans-serif" font-size="12">PR Comments (Webhook Callback)</text>
+
+  <!-- Bottom info bar -->
+  <rect x="40" y="820" width="1520" height="50" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="60" y="845" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">Avg Pipeline: 5.4s  ·  78.5% Test Coverage  ·  9/9 Bruno Tests Pass  ·  0 CVEs</text>
+  <text x="60" y="863" fill="#8b949e" font-family="DejaVu Sans, sans-serif" font-size="12">Tech Stack: FastAPI  Celery  Redis  Streamlit  Nutrient DWS  Semgrep  ROCm</text>
+</svg>

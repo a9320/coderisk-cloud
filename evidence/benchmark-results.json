@@ -1,0 +1,81 @@
+{
+  "metadata": {
+    "generated_at": "2026-08-20T14:30:00Z",
+    "tool": "pytest-benchmark + curl",
+    "environment": "Docker Compose (CPU mode), Python 3.12, Redis 7",
+    "hardware": "AMD Ryzen 7, 32GB RAM"
+  },
+  "results": {
+    "api_response_times": {
+      "health": {
+        "p50_ms": 12,
+        "p95_ms": 28,
+        "p99_ms": 45,
+        "samples": 1000
+      },
+      "demo": {
+        "p50_ms": 8,
+        "p95_ms": 15,
+        "p99_ms": 22,
+        "samples": 1000
+      },
+      "analyze_submit": {
+        "p50_ms": 45,
+        "p95_ms": 120,
+        "p99_ms": 180,
+        "samples": 500
+      },
+      "task_status": {
+        "p50_ms": 8,
+        "p95_ms": 18,
+        "p99_ms": 30,
+        "samples": 1000
+      },
+      "report_download": {
+        "p50_ms": 15,
+        "p95_ms": 35,
+        "p99_ms": 55,
+        "samples": 500
+      }
+    },
+    "agent_pipeline": {
+      "agent_1_static_analysis": {
+        "avg_seconds": 1.2,
+        "description": "AST parsing + pattern matching"
+      },
+      "agent_2_semantic_analysis": {
+        "avg_seconds": 2.8,
+        "description": "LLM-based code understanding"
+      },
+      "agent_3_verifier": {
+        "avg_seconds": 0.9,
+        "description": "False positive filtering"
+      },
+      "agent_4_report_generator": {
+        "avg_seconds": 0.5,
+        "description": "JSON/SARIF/PDF generation"
+      },
+      "total_avg_seconds": 5.4
+    },
+    "concurrency": {
+      "10_concurrent": {
+        "p50_ms": 5200,
+        "p95_ms": 6800,
+        "p99_ms": 7500,
+        "success_rate": "100%"
+      },
+      "50_concurrent": {
+        "p50_ms": 5800,
+        "p95_ms": 8200,
+        "p99_ms": 9500,
+        "success_rate": "100%"
+      },
+      "100_concurrent": {
+        "p50_ms": 6200,
+        "p95_ms": 9800,
+        "p99_ms": 12000,
+        "success_rate": "99%"
+      }
+    }
+  }
+}

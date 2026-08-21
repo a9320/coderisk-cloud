@@ -1,0 +1,56 @@
+# Pre-commit hooks for CodeRisk Cloud
+# Install: pip install pre-commit && pre-commit install
+# Run all: pre-commit run --all-files
+#
+# NOTE: TruffleHog requires the binary to be installed separately:
+#   macOS: brew install trufflesecurity/tap/trufflehog
+#   Linux: curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh
+#   Or:   docker run --rm -v "$PWD:/pwd" trufflesecurity/trufflehog:latest git file:///pwd --since-commit HEAD --only-verified --fail
+
+repos:
+  # ── Code Formatting ──
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.1
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # ── Import Sorting ──
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+
+  # ── Secrets Scanning (Critical!) ──
+  # Requires trufflehog binary in PATH. See installation note above.
+  - repo: local
+    hooks:
+      - id: trufflehog
+        name: TruffleHog — Detect secrets
+        entry: trufflehog git file://. --since-commit HEAD --only-verified --fail
+        language: system
+        pass_filenames: false
+        stages: [commit]
+
+  # ── File Checks ──
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=5120']
+      - id: check-json
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-case-conflict
+
+  # ── Python Static Analysis ──
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.1
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-requests, types-redis]
+        args: [--ignore-missing-imports]
