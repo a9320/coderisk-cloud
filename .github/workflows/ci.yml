@@ -53,6 +53,8 @@ jobs:
       - name: Run Cloud layer tests
         env:
           PYTHONPATH: ${{ github.workspace }}
+          CODERISK_PATH: ${{ github.workspace }}/code-risk-agent
+          REPORTS_DIR: ${{ github.workspace }}/reports
         run: pytest tests/ -v --tb=short
 
       - name: Install Engine dependencies
@@ -71,6 +73,8 @@ jobs:
       - name: Generate coverage report
         env:
           PYTHONPATH: ${{ github.workspace }}
+          CODERISK_PATH: ${{ github.workspace }}/code-risk-agent
+          REPORTS_DIR: ${{ github.workspace }}/reports
         run: pytest tests/ --cov=app --cov-report=xml --cov-report=term || true
 
       - name: Upload coverage to Codecov
