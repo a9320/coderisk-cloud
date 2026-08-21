@@ -32,5 +32,5 @@ def test_demo_returns_200_with_9_findings(client):
     first = data["findings"][0]
     assert "id" in first
     assert "severity" in first
-    assert "type" in first
+    assert "category" in first      # field name is "category", not "type"
     assert "file" in first

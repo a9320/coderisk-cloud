@@ -12,7 +12,7 @@ def test_demo_findings_have_required_fields(client):
         assert "id" in f and f["id"].startswith("CR-")
         assert "severity" in f
         assert f["severity"].lower() in SEVERITY_ORDER
-        assert "type" in f
+        assert "category" in f
         assert "file" in f
         assert "line" in f
         assert "description" in f
