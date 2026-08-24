@@ -11,6 +11,7 @@ import sys
 import tempfile
 import zipfile
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -276,15 +277,20 @@ def analyze_codebase_task(self, task_id: str, source_config: dict[str, Any]) -> 
             raise ValueError("Failed to prepare source code")
         logger.info(f"[{task_id}] Code prepared at {work_dir}")
 
-        # 阶段 2: Agent 1 静态分析（串行，结果传给 Agent 2）
+        # 阶段 2: Agent 1 + Agent 2 并行执行
         _update_progress(task_id, "analyzing", 15, {
             "agent_1_static": "running",
-            "agent_2_semantic": "pending",
+            "agent_2_semantic": "running",
             "agent_3_verifier": "pending",
             "agent_4_report": "pending",
         })
 
-        static_findings = _run_static_analysis(task_id, work_dir)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_static = executor.submit(_run_static_analysis, task_id, work_dir)
+            future_semantic = executor.submit(_run_semantic_analysis, task_id, work_dir, [])
+
+            static_findings = future_static.result()
+            semantic_findings = future_semantic.result()
 
         # 阶段 2b: 污点分析（source→sink 数据流追踪）
         taint_findings = _run_taint_analysis(task_id, work_dir)
@@ -293,17 +299,6 @@ def analyze_codebase_task(self, task_id: str, source_config: dict[str, Any]) -> 
         # 阶段 2c: 依赖扫描（requirements.txt 已知漏洞）
         dep_findings = _run_dependency_scan(task_id, work_dir)
         static_findings.extend(dep_findings)
-
-        # 阶段 2d: Agent 2 语义分析（接收 Agent 1 结果，过滤误报）
-        _update_progress(task_id, "analyzing", 40, {
-            "agent_1_static": "completed",
-            "agent_1b_taint": "completed",
-            "agent_1c_dependency": "completed",
-            "agent_2_semantic": "running",
-            "agent_3_verifier": "pending",
-            "agent_4_report": "pending",
-        })
-        semantic_findings = _run_semantic_analysis(task_id, work_dir, static_findings)
 
         _update_progress(task_id, "analyzing", 55, {
             "agent_1_static": "completed",
@@ -515,7 +510,7 @@ def _run_static_analysis(task_id: str, code_path: str) -> list[dict]:
         return [_risk_to_dict(r) for r in risks]
     except Exception as e:
         logger.error(f"[{task_id}] Static analysis failed: {e}")
-        return []
+        return [{"type": "error", "message": f"Static analysis failed: {e}", "severity": "info"}]
 
 
 def _run_semantic_analysis(task_id: str, code_path: str, static_findings: list[dict]) -> list[dict]:
@@ -577,7 +572,7 @@ def _run_taint_analysis(task_id: str, code_path: str) -> list[dict]:
                 all_flows.append({
                     "id": f"TAINT-{hash(str(flow)) & 0xFFFF:04x}",
                     "type": flow.cwe_id,
-                    "title": f"Taint: {flow.source} -> {flow.sink}",
+                    "title": f"Taint: {flow.source} → {flow.sink}",
                     "severity": flow.severity,
                     "description": flow.description,
                     "file": file_path,
