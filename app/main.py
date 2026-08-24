@@ -386,3 +386,59 @@ async def demo():
     """Demo endpoint — 返回一份预置的示例扫描结果，无需 API Key"""
     from app.demo_fixture import DEMO_REPORT
     return DEMO_REPORT
+
+
+# ── LOCAL SCAN ENDPOINT (DevNetwork Day 5) ──
+@app.post("/api/v1/scan-local")
+async def scan_local(request: Request, authorization: str | None = Header(None)):
+    """扫描本地目录（Docker 环境无法访问 GitHub 时使用）
+
+    Body: {"local_path": "/repos/Damn-Vulnerable-Flask-Application"}
+    """
+    import os
+    verify_api_key(authorization)
+
+    body = await request.json()
+    local_path = body.get("local_path", "").strip()
+
+    if not local_path:
+        raise HTTPException(status_code=400, detail="local_path is required")
+
+    # 安全校验：三层防护
+    normalized = os.path.normpath(local_path)
+    if ".." in normalized.split(os.sep):
+        raise HTTPException(status_code=400, detail="Path traversal detected")
+    if not normalized.startswith("/repos/"):
+        raise HTTPException(status_code=400, detail="Path must be under /repos/")
+    if not os.path.isdir(normalized):
+        raise HTTPException(status_code=400, detail=f"Directory does not exist: {normalized}")
+
+    task_id = f"cr-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8]}"
+    formats = body.get("output_formats", ["json"])
+
+    meta = {
+        "task_id": task_id,
+        "source": "local",
+        "local_path": normalized,
+        "output_formats": formats,
+        "callback_url": None,
+        "created_at": datetime.now().isoformat(),
+        "api_key_hash": hashlib.sha256(authorization.encode()).hexdigest()[:16],
+    }
+    r.set(f"task:{task_id}:meta", json.dumps(meta), ex=86400)
+    r.set(f"task:{task_id}:status", json.dumps({
+        "task_id": task_id,
+        "status": "pending",
+        "progress": 0,
+        "agent_status": {},
+        "updated_at": datetime.now().isoformat(),
+    }), ex=86400)
+
+    analyze_codebase_task.delay(task_id, meta)
+    logger.info(f"[{task_id}] Local scan started, path={normalized}")
+
+    return AnalyzeResponse(
+        task_id=task_id,
+        status=TaskStatus.PENDING,
+        message=f"Local scan queued. Use GET /api/v1/tasks/{task_id} to check progress.",
+    )

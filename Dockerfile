@@ -21,6 +21,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# code-risk-agent（git submodule，构建前确保已初始化）
+COPY code-risk-agent/ ./code-risk-agent/
+
+# 预构建 CVE 数据库（Agent 3 交叉验证用）
+RUN cd /app/code-risk-agent && \
+    python scripts/download_cve_data.py || echo "CVE DB build skipped (non-fatal)"
+
 # 应用代码
 COPY app/ ./app/
 
@@ -28,7 +35,7 @@ COPY app/ ./app/
 RUN mkdir -p /app/reports /app/reports/uploads
 
 # 环境变量默认值
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/code-risk-agent
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV REDIS_URL=redis://redis:6379/0

@@ -59,6 +59,19 @@ if settings.CODERISK_PATH and settings.CODERISK_PATH not in sys.path:
 _static_analyzer = None
 _semantic_analyzer = None
 _deep_verifier = None
+_llm_client = None
+
+
+def _get_llm_client():
+    """Lazy-init LLM client (may be None if not configured)."""
+    global _llm_client
+    if _llm_client is None:
+        try:
+            from core.llm_client import LLMClient
+            _llm_client = LLMClient()
+        except Exception:
+            _llm_client = None
+    return _llm_client
 
 
 def _get_static_analyzer():
@@ -73,7 +86,10 @@ def _get_semantic_analyzer():
     global _semantic_analyzer
     if _semantic_analyzer is None:
         from agents.semantic_analyzer import SemanticAnalyzer
-        _semantic_analyzer = SemanticAnalyzer()
+        llm = _get_llm_client()
+        if llm is None:
+            return None
+        _semantic_analyzer = SemanticAnalyzer(llm)
     return _semantic_analyzer
 
 
@@ -81,8 +97,139 @@ def _get_deep_verifier():
     global _deep_verifier
     if _deep_verifier is None:
         from agents.deep_verifier import DeepVerifier
-        _deep_verifier = DeepVerifier()
+        from core.memory import MemoryLayer
+        from core.cve_client import CVEClient
+        llm = _get_llm_client()
+        _deep_verifier = DeepVerifier(
+            llm_client=llm,
+            memory=MemoryLayer(),
+            cve_client=CVEClient(),
+        )
     return _deep_verifier
+
+
+# ═══════════════════════════════════════════════════════════════
+# Cloud 层 ↔ 引擎层 数据模型转换（Kimi v33 集成）
+# ═══════════════════════════════════════════════════════════════
+
+def _scan_code_files(work_dir: str) -> list:
+    """扫描工作目录，收集所有支持的代码文件为 CodeFile 对象"""
+    try:
+        from core.models import CodeFile
+    except ImportError as e:
+        logger.error(f"Cannot import CodeFile from engine: {e}")
+        return []
+
+    code_files = []
+    work_path = Path(work_dir)
+    extensions = (".c", ".h", ".py")
+
+    for ext in extensions:
+        for file_path in work_path.rglob(f"*{ext}"):
+            if not file_path.is_file():
+                continue
+            try:
+                code_file = CodeFile.from_path(file_path)
+                code_files.append(code_file)
+            except Exception as e:
+                logger.debug(f"Skipping file {file_path}: {e}")
+                continue
+
+    logger.info(f"Scanned {len(code_files)} code files from {work_dir}")
+    return code_files
+
+
+def _dict_to_risk(finding: dict):
+    """将 API 层的 dict finding 转换为引擎层的 Risk 对象"""
+    from core.models import Risk, Severity, Confidence, Language, Evidence
+
+    severity_str = str(finding.get("severity", "info")).lower()
+    try:
+        severity = Severity(severity_str)
+    except ValueError:
+        severity = Severity.INFO
+
+    conf_raw = finding.get("confidence", 50)
+    if isinstance(conf_raw, (int, float)):
+        if conf_raw <= 1.0:
+            conf_raw = conf_raw * 100
+        if conf_raw >= 70:
+            confidence = Confidence.HIGH
+        elif conf_raw >= 40:
+            confidence = Confidence.MEDIUM
+        else:
+            confidence = Confidence.LOW
+    else:
+        conf_str = str(conf_raw).lower()
+        try:
+            confidence = Confidence(conf_str)
+        except ValueError:
+            confidence = Confidence.LOW
+
+    lang_str = str(finding.get("language", "unknown")).lower()
+    try:
+        language = Language(lang_str)
+    except ValueError:
+        language = Language.UNKNOWN
+
+    file_path = Path(finding.get("file", ".")) if finding.get("file") else Path(".")
+
+    # evidence 映射（v34 改进）
+    evidence = []
+    snippet = finding.get("code_snippet", "")
+    if snippet:
+        evidence.append(Evidence(
+            source=finding.get("agent", "unknown"),
+            rule_id=finding.get("type"),
+            snippet=snippet,
+            line_start=finding.get("line", 0),
+            line_end=finding.get("line", 0),
+            reasoning=finding.get("description", ""),
+        ))
+
+    return Risk(
+        id=finding.get("id") or f"RISK-{uuid.uuid4().hex[:8].upper()}",
+        title=finding.get("title") or finding.get("category", "Unknown Risk"),
+        description=finding.get("description", ""),
+        severity=severity,
+        confidence=confidence,
+        cwe_id=finding.get("cwe") or finding.get("type"),
+        language=language,
+        file_path=file_path,
+        line_start=finding.get("line", 0),
+        line_end=finding.get("line", 0),
+        evidence=evidence,
+        suggestion=finding.get("recommendation") or finding.get("suggestion", "Review this code section."),
+    )
+
+
+def _risk_to_dict(risk) -> dict:
+    """将引擎层的 Risk 对象转换为 API 层的 dict（v34 改进）"""
+    conf_map = {"high": 80, "medium": 50, "low": 30}
+    confidence_val = conf_map.get(risk.confidence.value, 30)
+
+    snippet = ""
+    agent = "unknown"
+    if risk.evidence:
+        snippet = risk.evidence[0].snippet
+        agent = risk.evidence[0].source
+
+    return {
+        "id": risk.id,
+        "type": risk.cwe_id or "CWE-1395",
+        "title": risk.title,
+        "category": risk.title,
+        "severity": risk.severity.value,
+        "confidence": confidence_val,
+        "cwe": risk.cwe_id,
+        "description": risk.description,
+        "file": str(risk.file_path),
+        "line": risk.line_start,
+        "language": risk.language.value,
+        "code_snippet": snippet,
+        "agent": agent,
+        "suggestion": risk.suggestion,
+    }
 
 
 # ── 进度更新 ──
@@ -145,13 +292,23 @@ def analyze_codebase_task(self, task_id: str, source_config: dict[str, Any]) -> 
             static_findings = future_static.result()
             semantic_findings = future_semantic.result()
 
+        # 阶段 2b: 污点分析（source→sink 数据流追踪）
+        taint_findings = _run_taint_analysis(task_id, work_dir)
+        static_findings.extend(taint_findings)
+
+        # 阶段 2c: 依赖扫描（requirements.txt 已知漏洞）
+        dep_findings = _run_dependency_scan(task_id, work_dir)
+        static_findings.extend(dep_findings)
+
         _update_progress(task_id, "analyzing", 55, {
             "agent_1_static": "completed",
+            "agent_1b_taint": "completed",
+            "agent_1c_dependency": "completed",
             "agent_2_semantic": "completed",
             "agent_3_verifier": "pending",
             "agent_4_report": "pending",
         })
-        logger.info(f"[{task_id}] Static: {len(static_findings)} findings, Semantic: {len(semantic_findings)} findings")
+        logger.info(f"[{task_id}] Static: {len(static_findings)} findings, Semantic: {len(semantic_findings)} findings, Taint: {len(taint_findings)} findings, Dep: {len(dep_findings)} findings")
 
         # 合并去重
         merged_findings = _merge_findings(static_findings, semantic_findings)
@@ -254,6 +411,27 @@ def _prepare_code(task_id: str, config: dict) -> str | None:
             logger.error(f"Git clone failed: {e.stderr.decode()[:200]}")
             return None
 
+    elif source == "local":
+        local_path = config.get("local_path", "").strip()
+        if not local_path:
+            logger.error(f"[{task_id}] Local source but local_path is empty")
+            return None
+
+        import os
+        normalized = os.path.normpath(local_path)
+        if ".." in normalized.split(os.sep):
+            logger.error(f"[{task_id}] Path traversal detected: {local_path}")
+            return None
+        if not normalized.startswith("/repos/"):
+            logger.error(f"[{task_id}] Local path must be under /repos/: {local_path}")
+            return None
+        if not os.path.isdir(normalized):
+            logger.error(f"[{task_id}] Directory does not exist: {normalized}")
+            return None
+
+        logger.info(f"[{task_id}] Using local directory: {normalized}")
+        return normalized
+
     elif source == "zip":
         zip_path_str = config.get("zip_path")
         if not zip_path_str:
@@ -321,11 +499,15 @@ def _prepare_code(task_id: str, config: dict) -> str | None:
 
 
 def _run_static_analysis(task_id: str, code_path: str) -> list[dict]:
-    """Agent 1: 静态分析（Semgrep）"""
+    """Agent 1: 静态分析（Tree-sitter 模式匹配）"""
     try:
         analyzer = _get_static_analyzer()
-        results = analyzer.analyze(code_path)
-        return results if isinstance(results, list) else []
+        code_files = _scan_code_files(code_path)
+        if not code_files:
+            logger.warning(f"[{task_id}] No analyzable files found in {code_path}")
+            return []
+        risks = analyzer.analyze_batch(code_files)
+        return [_risk_to_dict(r) for r in risks]
     except Exception as e:
         logger.error(f"[{task_id}] Static analysis failed: {e}")
         return [{"type": "error", "message": f"Static analysis failed: {e}", "severity": "info"}]
@@ -335,22 +517,98 @@ def _run_semantic_analysis(task_id: str, code_path: str, static_findings: list[d
     """Agent 2: 语义分析（LLM）"""
     try:
         analyzer = _get_semantic_analyzer()
-        results = analyzer.analyze(code_path, static_findings)
-        return results if isinstance(results, list) else static_findings
+        if analyzer is None:
+            logger.info(f"[{task_id}] No LLM client, skipping semantic analysis")
+            return []
+        code_files = _scan_code_files(code_path)
+        existing_risks = []
+        all_risks = []
+        for cf in code_files:
+            risks = analyzer.analyze(cf, existing_risks)
+            all_risks.extend(risks)
+        return [_risk_to_dict(r) for r in all_risks]
     except Exception as e:
         logger.error(f"[{task_id}] Semantic analysis failed: {e}")
-        return static_findings
+        return []
 
 
 def _run_verification(task_id: str, code_path: str, findings: list[dict]) -> list[dict]:
     """Agent 3: 深度验证（交叉验证）"""
     try:
         verifier = _get_deep_verifier()
-        results = verifier.verify(code_path, findings)
-        return results if isinstance(results, list) else findings
+        code_files = _scan_code_files(code_path)
+        if not findings:
+            return findings
+        risks = [_dict_to_risk(f) for f in findings]
+        verified_risks = verifier.verify_batch(code_files, risks)
+        findings = [_risk_to_dict(r) for r in verified_risks]
+        logger.info(f"[{task_id}] Deep verification: {len(findings)} findings after verification")
+        return findings
     except Exception as e:
         logger.error(f"[{task_id}] Verification failed: {e}")
         return findings
+
+
+def _run_taint_analysis(task_id: str, code_path: str) -> list[dict]:
+    """Agent 1b: 污点分析（source→sink 数据流追踪）"""
+    try:
+        from core.taint_analyzer import TaintAnalyzer
+        from core.models import Language
+        taint = TaintAnalyzer()
+        code_files = _scan_code_files(code_path)
+        if not code_files:
+            return []
+        all_flows = []
+        for cf in code_files:
+            content = cf.content
+            file_path = str(cf.path)
+            if cf.language == Language.C:
+                flows = taint.analyze_c(content, file_path)
+            elif cf.language == Language.PYTHON:
+                flows = taint.analyze_python(content, file_path)
+            else:
+                continue
+            for flow in flows:
+                all_flows.append({
+                    "id": f"TAINT-{hash(str(flow)) & 0xFFFF:04x}",
+                    "type": flow.cwe_id,
+                    "title": f"Taint: {flow.source} → {flow.sink}",
+                    "severity": flow.severity,
+                    "description": flow.description,
+                    "file": file_path,
+                    "line": flow.sink_line,
+                    "confidence": 60 if flow.confidence == "medium" else 80,
+                })
+        logger.info(f"[{task_id}] Taint analysis: {len(all_flows)} flows found")
+        return all_flows
+    except Exception as e:
+        logger.error(f"[{task_id}] Taint analysis failed: {e}")
+        return []
+
+
+def _run_dependency_scan(task_id: str, code_path: str) -> list[dict]:
+    """Agent 1c: 依赖扫描（requirements.txt / package.json 已知漏洞）"""
+    try:
+        from core.dependency_scanner import scan_project_dependencies
+        risks = scan_project_dependencies(Path(code_path))
+        result = []
+        for r in risks:
+            pkg = r.get("package", "unknown")
+            result.append({
+                "id": f"DEP-{pkg.upper()}",
+                "type": r.get("cwe", "CWE-1395"),
+                "title": f"Vulnerable dependency: {pkg} {r.get('version', '')}".strip(),
+                "severity": "high",
+                "description": r.get("description", ""),
+                "file": r.get("file", "requirements.txt"),
+                "line": 0,
+                "confidence": 50,
+            })
+        logger.info(f"[{task_id}] Dependency scan: {len(result)} findings")
+        return result
+    except Exception as e:
+        logger.error(f"[{task_id}] Dependency scan failed: {e}")
+        return []
 
 
 def _merge_findings(static: list[dict], semantic: list[dict]) -> list[dict]:
@@ -396,18 +654,25 @@ def _generate_report(task_id: str, findings: list[dict], formats: list[str], nut
     if "pdf" in formats:
         pdf_path = settings.REPORTS_DIR / f"{task_id}.pdf"
         import asyncio
-        pdf_bytes = asyncio.run(nutrient.generate_pdf(report))
-        if pdf_bytes:
-            # 签名
-            signed_bytes = asyncio.run(nutrient.sign_pdf(pdf_bytes))
-            final_bytes = signed_bytes or pdf_bytes
-            pdf_path.write_bytes(final_bytes)
-            report["pdf_path"] = str(pdf_path)
-            report["pdf_size"] = len(final_bytes)
-            logger.info(f"[{task_id}] PDF saved: {pdf_path} ({len(final_bytes)} bytes)")
-        else:
-            report["pdf_path"] = None
-            report["pdf_error"] = "Nutrient API unavailable or key not configured"
+        try:
+            pdf_bytes = asyncio.run(nutrient.generate_pdf(report))
+            if pdf_bytes:
+                signed_bytes = asyncio.run(nutrient.sign_pdf(pdf_bytes))
+                final_bytes = signed_bytes or pdf_bytes
+                pdf_path.write_bytes(final_bytes)
+                report["pdf_path"] = str(pdf_path)
+                report["pdf_size"] = len(final_bytes)
+                logger.info(f"[{task_id}] PDF saved: {pdf_path} ({len(final_bytes)} bytes)")
+            else:
+                report["pdf_path"] = None
+                report["pdf_error"] = "Nutrient API unavailable or key not configured"
+        except RuntimeError as e:
+            if "cannot be called from a running event loop" in str(e):
+                logger.warning(f"[{task_id}] PDF generation skipped: event loop conflict in Celery worker")
+                report["pdf_path"] = None
+                report["pdf_error"] = "PDF generation not supported in async worker context"
+            else:
+                raise
         report["digital_signature"] = "sha256:" + hashlib.sha256(json.dumps(report).encode()).hexdigest()[:32]
 
     return report
