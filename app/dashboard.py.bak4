@@ -1,0 +1,486 @@
+import streamlit as st
+import requests
+import time
+from datetime import datetime
+
+# ── Page Config ──────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="CodeRisk Cloud",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── API Config ───────────────────────────────────────────────────────────────
+API_BASE = "http://api:8000"
+DEMO_API = f"{API_BASE}/demo"
+HEALTH_API = f"{API_BASE}/health"
+SCAN_LOCAL_API = f"{API_BASE}/api/v1/scan-local"
+SCAN_GITHUB_API = f"{API_BASE}/api/v1/analyze"
+TASKS_API = f"{API_BASE}/api/v1/tasks"
+REPORTS_API = f"{API_BASE}/api/v1/reports"
+
+API_TOKEN = "dev-ke…tion"
+HEADERS = {"Authorization": f"Bearer {API_TOKEN}"}
+
+POLL_INTERVAL = 2      # seconds
+POLL_TIMEOUT = 60      # seconds
+
+# ── Session State Init ───────────────────────────────────────────────────────
+def init_session_state():
+    defaults = {
+        "tasks": [],
+        "selected_task": None,
+        "scan_mode": "local",
+        "repo_url": "",
+        "branch": "main",
+        "local_path": "/repos/Damn-Vulnerable-Flask-Application",
+        "polling_since": {},   # task_id -> timestamp when polling started
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
+
+init_session_state()
+
+# ── API Helpers ─────────────────────────────────────────────────────────────
+def api_get(url, timeout=10):
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=timeout)
+        return r.status_code, r.json() if r.status_code == 200 else None
+    except Exception as e:
+        return None, str(e)
+
+def api_post(url, payload=None, timeout=30):
+    try:
+        r = requests.post(url, headers=HEADERS, json=payload or {}, timeout=timeout)
+        return r.status_code, r.json() if r.status_code in (200, 201, 202) else None
+    except Exception as e:
+        return None, str(e)
+
+# ── Polling Logic ───────────────────────────────────────────────────────────
+def poll_pending_tasks():
+    """轮询所有 pending 任务的状态，返回是否更新了任何任务"""
+    updated = False
+    now = time.time()
+
+    for task in st.session_state.tasks:
+        if task.get("status") != "pending":
+            continue
+
+        task_id = task["task_id"]
+        started = st.session_state.polling_since.get(task_id)
+        if started is None:
+            st.session_state.polling_since[task_id] = now
+            started = now
+
+        # 超时检查
+        if now - started > POLL_TIMEOUT:
+            task["status"] = "failed"
+            task["error"] = "扫描超时（超过60秒）"
+            updated = True
+            continue
+
+        # 获取任务状态
+        code, data = api_get(f"{TASKS_API}/{task_id}")
+        if code == 200 and data:
+            new_status = data.get("status", "pending")
+            new_progress = data.get("progress", task.get("progress", 0))
+            task["progress"] = new_progress
+            task["agent_status"] = data.get("agent_status", {})
+
+            if new_status == "completed":
+                task["status"] = "completed"
+                task["progress"] = 100
+
+                # 获取报告数据
+                report_code, report = api_get(f"{REPORTS_API}/{task_id}")
+                if report_code == 200 and report:
+                    task["findings"] = report.get("findings", [])
+                    task["summary"] = report.get("summary", {})
+                    task["analysis"] = report.get("analysis", {})
+                    task["report_urls"] = report.get("report_urls", {})
+
+                # 自动选中该任务
+                st.session_state.selected_task = task_id
+                updated = True
+
+            elif new_status == "failed":
+                task["status"] = "failed"
+                task["error"] = data.get("error", "扫描失败")
+                updated = True
+
+            elif new_progress != task.get("progress"):
+                updated = True
+
+    return updated
+
+# ── UI Helpers ──────────────────────────────────────────────────────────────
+def severity_color(sev):
+    return {
+        "critical": "#ff4d4f",
+        "high": "#fa8c16",
+        "medium": "#faad14",
+        "low": "#52c41a",
+        "info": "#1890ff",
+    }.get(sev.lower(), "#8c8c8c")
+
+def severity_emoji(sev):
+    return {
+        "critical": "🔴",
+        "high": "🟠",
+        "medium": "🟡",
+        "low": "🟢",
+        "info": "🔵",
+    }.get(sev.lower(), "⚪")
+
+def status_emoji(status):
+    return {
+        "pending": "⏳",
+        "completed": "✅",
+        "failed": "❌",
+    }.get(status, "❓")
+
+def render_task_card(task, idx):
+    """渲染单个任务卡片"""
+    task_id = task["task_id"]
+    status = task.get("status", "pending")
+    progress = task.get("progress", 0)
+    source = task.get("source", "unknown")
+    is_selected = st.session_state.selected_task == task_id
+
+    border_color = "#1890ff" if is_selected else "#e8e8e8"
+    bg_color = "#f0f5ff" if is_selected else "#ffffff"
+
+    with st.container():
+        st.markdown(f"""
+        <div style="
+            border: 1px solid {border_color};
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            background-color: {bg_color};
+            cursor: pointer;
+        ">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:600; font-size:14px;">{status_emoji(status)} {task_id[:20]}...</span>
+                <span style="font-size:12px; color:#8c8c8c;">{source.upper()}</span>
+            </div>
+            <div style="margin-top:6px;">
+                <div style="background:#f0f0f0; border-radius:4px; height:6px; overflow:hidden;">
+                    <div style="background:#1890ff; width:{progress}%; height:100%; border-radius:4px; transition:width 0.3s;"></div>
+                </div>
+                <div style="font-size:11px; color:#8c8c8c; margin-top:2px;">{progress}% — {status.upper()}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("查看", key=f"select_{idx}", use_container_width=True):
+            st.session_state.selected_task = task_id
+            st.rerun()
+
+def render_finding(finding):
+    """渲染单个漏洞发现"""
+    sev = finding.get("severity", "info")
+    color = severity_color(sev)
+    emoji = severity_emoji(sev)
+
+    with st.container():
+        st.markdown(f"""
+        <div style="
+            border-left: 4px solid {color};
+            background: #fafafa;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 0 8px 8px 0;
+        ">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:600; font-size:15px;">{emoji} {finding.get('id', 'N/A')} — {finding.get('category', 'Unknown')}</span>
+                <span style="background:{color}; color:white; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:500;">{sev.upper()}</span>
+            </div>
+            <div style="margin-top:8px; font-size:13px; color:#595959;">
+                <b>文件:</b> <code>{finding.get('file', 'N/A')}</code> :{finding.get('line', 'N/A')}<br>
+                <b>CWE:</b> {finding.get('cwe', 'N/A')} | <b>置信度:</b> {finding.get('confidence', 'N/A')} | <b>Agent:</b> {finding.get('agent', 'N/A')}
+            </div>
+            <div style="margin-top:8px; font-size:13px;">
+                <b>描述:</b> {finding.get('description', '无描述')}
+            </div>
+            <div style="margin-top:8px; font-size:13px; color:#389e0d;">
+                <b>修复建议:</b> {finding.get('recommendation', '无建议')}
+            </div>
+            {f"<pre style='margin-top:8px; background:#f5f5f5; padding:8px; border-radius:4px; font-size:12px; overflow-x:auto;'><code>{finding.get('code_snippet', '')}</code></pre>" if finding.get('code_snippet') else ""}
+        </div>
+        """, unsafe_allow_html=True)
+
+# ── Sidebar ──────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.title("🛡️ CodeRisk Cloud")
+    st.caption("AI 驱动的代码安全分析平台")
+    st.divider()
+
+    # 健康检查
+    health_code, health_data = api_get(HEALTH_API, timeout=5)
+    if health_code == 200:
+        st.success("🟢 API 在线")
+    else:
+        st.error("🔴 API 离线")
+
+    st.divider()
+
+    # 扫描模式
+    st.subheader("扫描模式")
+    scan_mode = st.radio(
+        "选择扫描来源",
+        options=["local", "github", "demo"],
+        format_func=lambda x: {
+            "local": "📁 本地目录",
+            "github": "🌐 GitHub 仓库",
+            "demo": "🎮 Demo 数据",
+        }.get(x, x),
+        key="scan_mode",
+    )
+
+    st.divider()
+
+    # 扫描配置
+    if scan_mode == "local":
+        st.subheader("本地扫描")
+        local_path = st.text_input(
+            "本地目录路径",
+            value=st.session_state.local_path,
+            key="local_path_input",
+        )
+        st.session_state.local_path = local_path
+
+        if st.button("🚀 开始本地扫描", type="primary", use_container_width=True):
+            with st.spinner("提交扫描任务..."):
+                code, data = api_post(SCAN_LOCAL_API, {"local_path": local_path})
+                if code in (200, 201, 202) and data:
+                    task_id = data.get("task_id") or data.get("task", {}).get("task_id")
+                    if task_id:
+                        new_task = {
+                            "task_id": task_id,
+                            "status": "pending",
+                            "progress": 0,
+                            "source": "local",
+                            "repo_url": local_path,
+                            "branch": "N/A",
+                            "summary": {},
+                            "findings": [],
+                            "analysis": {},
+                            "report_urls": {},
+                            "is_demo": False,
+                            "created_at": datetime.now().isoformat(),
+                        }
+                        st.session_state.tasks.insert(0, new_task)
+                        st.session_state.polling_since[task_id] = time.time()
+                        st.session_state.selected_task = task_id
+                        st.success(f"任务已提交: {task_id}")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error("响应中未找到 task_id")
+                else:
+                    st.error(f"提交失败: {data or '未知错误'}")
+
+    elif scan_mode == "github":
+        st.subheader("GitHub 扫描")
+        repo_url = st.text_input(
+            "GitHub 仓库 URL",
+            value=st.session_state.repo_url,
+            placeholder="https://github.com/owner/repo",
+            key="repo_url_input",
+        )
+        st.session_state.repo_url = repo_url
+        branch = st.text_input("分支", value=st.session_state.branch, key="branch_input")
+        st.session_state.branch = branch
+
+        if st.button("🚀 开始 GitHub 扫描", type="primary", use_container_width=True):
+            with st.spinner("提交扫描任务..."):
+                code, data = api_post(SCAN_GITHUB_API, {"source": "github", "repo_url": repo_url, "branch": branch})
+                if code in (200, 201, 202) and data:
+                    task_id = data.get("task_id") or data.get("task", {}).get("task_id")
+                    if task_id:
+                        new_task = {
+                            "task_id": task_id,
+                            "status": "pending",
+                            "progress": 0,
+                            "source": "github",
+                            "repo_url": repo_url,
+                            "branch": branch,
+                            "summary": {},
+                            "findings": [],
+                            "analysis": {},
+                            "report_urls": {},
+                            "is_demo": False,
+                            "created_at": datetime.now().isoformat(),
+                        }
+                        st.session_state.tasks.insert(0, new_task)
+                        st.session_state.polling_since[task_id] = time.time()
+                        st.session_state.selected_task = task_id
+                        st.success(f"任务已提交: {task_id}")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error("响应中未找到 task_id")
+                else:
+                    st.error(f"提交失败: {data or '未知错误'}")
+
+    elif scan_mode == "demo":
+        st.subheader("Demo 数据")
+        st.info("加载预置的 9 个漏洞数据，无需等待扫描。")
+        if st.button("🎮 加载 Demo 数据", type="primary", use_container_width=True):
+            with st.spinner("加载 Demo 数据..."):
+                code, data = api_get(DEMO_API)
+                if code == 200 and data:
+                    task_id = f"demo-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+                    demo_task = {
+                        "task_id": task_id,
+                        "status": "completed",
+                        "progress": 100,
+                        "source": "demo",
+                        "repo_url": "Demo Repository",
+                        "branch": "N/A",
+                        "summary": data.get("summary", {}),
+                        "findings": data.get("findings", []),
+                        "analysis": data.get("analysis", {}),
+                        "report_urls": data.get("report_urls", {}),
+                        "is_demo": True,
+                        "created_at": datetime.now().isoformat(),
+                    }
+                    st.session_state.tasks.insert(0, demo_task)
+                    st.session_state.selected_task = task_id
+                    st.success("Demo 数据已加载")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error(f"加载失败: {data or '未知错误'}")
+
+    st.divider()
+    st.caption("CodeRisk Cloud © 2026")
+
+# ── Main Content ──────────────────────────────────────────────────────────────
+left_col, right_col = st.columns([1, 2])
+
+# ── Left: Task List ──────────────────────────────────────────────────────────
+with left_col:
+    st.header("📋 Analysis Tasks")
+
+    if not st.session_state.tasks:
+        st.info("暂无任务。请在侧边栏选择扫描模式并提交任务。")
+    else:
+        for idx, task in enumerate(st.session_state.tasks):
+            render_task_card(task, idx)
+
+# ── Right: Report Preview ────────────────────────────────────────────────────
+with right_col:
+    st.header("📊 Report Preview")
+
+    selected_id = st.session_state.selected_task
+    if not selected_id:
+        st.info("请从左侧任务列表选择一个任务查看报告。")
+    else:
+        task = next((t for t in st.session_state.tasks if t["task_id"] == selected_id), None)
+        if not task:
+            st.warning("选中的任务不存在。")
+        else:
+            status = task.get("status", "pending")
+            summary = task.get("summary", {})
+            findings = task.get("findings", [])
+            analysis = task.get("analysis", {})
+
+            # 状态栏
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("状态", status.upper())
+            with col2:
+                st.metric("漏洞总数", len(findings))
+            with col3:
+                st.metric("严重/高危", summary.get("critical", 0) + summary.get("high", 0))
+
+            st.divider()
+
+            if status == "pending":
+                progress = task.get("progress", 0)
+                st.progress(progress / 100.0, text=f"扫描中... {progress}%")
+                st.info("⏳ 任务正在处理中，请稍候...")
+
+                # 显示 Agent 状态
+                agent_status = task.get("agent_status", {})
+                if agent_status:
+                    cols = st.columns(4)
+                    agents = [
+                        ("agent_1_static", "🔍 静态分析"),
+                        ("agent_2_semantic", "🧠 语义分析"),
+                        ("agent_3_verifier", "✅ 验证器"),
+                        ("agent_4_report", "📄 报告生成"),
+                    ]
+                    for i, (key, label) in enumerate(agents):
+                        with cols[i]:
+                            s = agent_status.get(key, "pending")
+                            emoji = "✅" if s == "completed" else "⏳" if s == "pending" else "❌"
+                            st.caption(f"{emoji} {label}")
+
+            elif status == "failed":
+                st.error(f"❌ 扫描失败: {task.get('error', '未知错误')}")
+
+            elif status == "completed":
+                # 摘要图表
+                if summary:
+                    sev_data = {
+                        "Critical": summary.get("critical", 0),
+                        "High": summary.get("high", 0),
+                        "Medium": summary.get("medium", 0),
+                        "Low": summary.get("low", 0),
+                        "Info": summary.get("info", 0),
+                    }
+                    chart_cols = st.columns(len([v for v in sev_data.values() if v > 0]) or 1)
+                    idx = 0
+                    for label, count in sev_data.items():
+                        if count > 0 or len(sev_data) <= 5:
+                            with chart_cols[idx % len(chart_cols)]:
+                                color = severity_color(label.lower())
+                                st.markdown(f"""
+                                <div style="text-align:center; padding:8px; border-radius:6px; background:{color}15;">
+                                    <div style="font-size:24px; font-weight:700; color:{color};">{count}</div>
+                                    <div style="font-size:12px; color:#595959;">{label}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            idx += 1
+
+                st.divider()
+
+                # 分析元数据
+                if analysis:
+                    with st.expander("📈 分析详情"):
+                        st.json(analysis)
+
+                # 漏洞列表
+                st.subheader(f"🔍 漏洞详情 ({len(findings)} 个)")
+                if not findings:
+                    st.info("未发现漏洞。")
+                else:
+                    # 筛选
+                    sev_filter = st.multiselect(
+                        "按严重程度筛选",
+                        options=["critical", "high", "medium", "low", "info"],
+                        default=["critical", "high", "medium", "low", "info"],
+                        format_func=lambda x: f"{severity_emoji(x)} {x.upper()}",
+                        key="sev_filter",
+                    )
+                    filtered = [f for f in findings if f.get("severity", "info").lower() in sev_filter]
+
+                    for finding in filtered:
+                        render_finding(finding)
+
+# ── Polling Trigger ──────────────────────────────────────────────────────────
+has_pending = any(t.get("status") == "pending" for t in st.session_state.tasks)
+if has_pending:
+    # 执行轮询
+    updated = poll_pending_tasks()
+    if updated:
+        st.rerun()
+    else:
+        # 没有更新也等待 2 秒后刷新（继续轮询进度）
+        time.sleep(POLL_INTERVAL)
+        st.rerun()
