@@ -24,9 +24,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # code-risk-agent（git submodule，构建前确保已初始化）
 COPY code-risk-agent/ ./code-risk-agent/
 
-# 预构建 CVE 数据库（Agent 3 交叉验证用）
-RUN cd /app/code-risk-agent && \
-    python scripts/download_cve_data.py || echo "CVE DB build skipped (non-fatal)"
+# CVE 数据库：构建时跳过（下载太慢），运行时按需构建
+# RUN cd /app/code-risk-agent && \
+#     python scripts/download_cve_data.py || echo "CVE DB build skipped (non-fatal)"
+RUN echo "CVE DB build skipped (will build at runtime if needed)"
 
 # 应用代码
 COPY app/ ./app/
