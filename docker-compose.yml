@@ -18,7 +18,7 @@ services:
       - "8000:8000"
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - CODERISK_API_KEY=${CODERISK_API_KEY:-dev-key-change-in-production}
+      - CODERISK_API_KEY=dev-key-change-in-production
       - CODERISK_PATH=/app/code-risk-agent
       - NUTRIENT_DWS_API_KEY=${NUTRIENT_DWS_API_KEY:-}
       - REPORTS_DIR=/app/reports
@@ -37,7 +37,7 @@ services:
     command: celery -A app.tasks worker --loglevel=info --concurrency=${WORKER_CONCURRENCY:-2}
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - CODERISK_API_KEY=${CODERISK_API_KEY:-dev-key-change-in-production}
+      - CODERISK_API_KEY=dev-key-change-in-production
       - CODERISK_PATH=/app/code-risk-agent
       - PYTHONPATH=/app/code-risk-agent
       - NUTRIENT_DWS_API_KEY=${NUTRIENT_DWS_API_KEY:-}

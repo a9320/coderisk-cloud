@@ -1,9 +1,7 @@
 """CodeRisk Cloud — Streamlit Dashboard with Local Scan support.
 
-PATCH (DevNetwork Day 5):
-- Added "Local Scan" mode alongside GitHub
-- Auto-detects /repos/ directories
-- Auto-loads demo data on startup
+PATCH (DevNetwork Day 8):
+- File 列改为只显示文件名（Path.name），Detail View 保留完整路径
 """
 import streamlit as st
 import requests
@@ -11,6 +9,7 @@ import json
 import os
 import time
 from datetime import datetime
+from pathlib import Path  # ← 新增
 
 # ── Configuration ──
 API_BASE = "http://api:8000"
@@ -408,11 +407,14 @@ with col_report:
             for f in findings:
                 sev = f.get("severity", "info").lower()
                 sev_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢", "info": "⚪"}.get(sev, "⚪")
+                # PATCH: File 列只显示文件名，避免长路径截断
+                file_path = f.get("file", "")
+                file_name = Path(file_path).name if file_path else ""
                 table_data.append({
                     "ID": f.get("id", ""),
                     "Severity": f"{sev_emoji} {sev.upper()}",
                     "Category": f.get("category", f.get("type", "")),
-                    "File": f.get("file", ""),
+                    "File": file_name,  # ← 只显示文件名
                     "Line": f.get("line", ""),
                     "Confidence": f"{f.get('confidence', 0)*100:.0f}%",
                     "Agent": f.get("agent", ""),
@@ -437,7 +439,7 @@ with col_report:
                     st.markdown(f"**Confidence:** {f.get('confidence', 0)*100:.0f}%")
                     st.markdown(f"**Agent:** `{f.get('agent', '')}`")
                 with col_d2:
-                    st.markdown(f"**File:** `{f.get('file')}`:{f.get('line')}")
+                    st.markdown(f"**File:** `{f.get('file')}`:{f.get('line')}")  # ← Detail View 保留完整路径
                     st.markdown("**Code Snippet:**")
                     snippet = f.get("code_snippet", "N/A")
                     st.markdown(f'<div class="code-block">{snippet}</div>', unsafe_allow_html=True)
