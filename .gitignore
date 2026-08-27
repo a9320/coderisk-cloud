@@ -20,6 +20,10 @@ backups/
 优化建议/
 *.bak
 
+# Demo 视频（不入库，DevPost 单独提交）
+Demo/
+Demo
+
 # Python
 __pycache__/
 *.pyc

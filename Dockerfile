@@ -1,14 +1,14 @@
 # CodeRisk Cloud — Unified Docker Image
-# 支持模式：API / Worker / Dashboard（通过 docker-compose 覆盖 command）
+# Modes: API / Worker / Dashboard (overridden via docker-compose command)
 
 FROM python:3.12-slim
 
-LABEL maintainer="AI溢出安全实验室 <overflow@example.com>"
+LABEL maintainer="Overflow Security Lab <overflow@example.com>"
 LABEL description="CodeRisk Cloud — AI-powered code security API"
 
 WORKDIR /app
 
-# 系统依赖：git（clone 仓库）、gcc（编译 Python 包）、ca-certificates
+# System deps: git (clone repos), gcc (build Python packages), ca-certificates
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     gcc \
@@ -16,26 +16,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Python 依赖（一次性安装，利用缓存层）
+# Python deps (installed once, leverages cache layers)
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# code-risk-agent（git submodule，构建前确保已初始化）
+# code-risk-agent (git submodule, ensure initialized before build)
 COPY code-risk-agent/ ./code-risk-agent/
 
-# CVE 数据库：构建时跳过（下载太慢），运行时按需构建
+# CVE database: skipped at build time (download too slow), built on demand at runtime
 # RUN cd /app/code-risk-agent && \
 #     python scripts/download_cve_data.py || echo "CVE DB build skipped (non-fatal)"
 RUN echo "CVE DB build skipped (will build at runtime if needed)"
 
-# 应用代码
+# Application code
 COPY app/ ./app/
 
-# 运行时目录
+# Runtime directory
 RUN mkdir -p /app/reports /app/reports/uploads
 
-# 环境变量默认值
+# Environment variable defaults
 ENV PYTHONPATH=/app:/app/code-risk-agent
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -44,12 +44,12 @@ ENV REPORTS_DIR=/app/reports
 ENV CODERISK_PATH=/app/code-risk-agent
 ENV WORKER_CONCURRENCY=2
 
-# 暴露端口（API + Dashboard）
+# Expose ports (API + Dashboard)
 EXPOSE 8000 8501
 
-# 健康检查（API 模式）
+# Health check (API mode)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
-# 默认启动 API（docker-compose 会覆盖为 worker/dashboard）
+# Default CMD runs API (docker-compose overrides to worker/dashboard)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
