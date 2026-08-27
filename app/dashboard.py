@@ -12,7 +12,8 @@ from datetime import datetime
 from pathlib import Path  # ← 新增
 
 # ── Configuration ──
-API_BASE = "http://api:8000"
+# 魔搭创空间单容器模式：localhost；docker-compose 多容器模式：api 服务名
+API_BASE = os.environ.get("API_URL", "http://api:8000")
 DEMO_API = f"{API_BASE}/demo"
 HEALTH_API = f"{API_BASE}/health"
 SCAN_LOCAL_API = f"{API_BASE}/api/v1/scan-local"

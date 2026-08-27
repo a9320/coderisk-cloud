@@ -16,8 +16,11 @@ reports/uploads/
 # 内部工作文件
 backups/
 优化建议/
+Kimi/
+evidence/
 *.bak
 *.log
+*.ps1
 
 # Python
 __pycache__/
